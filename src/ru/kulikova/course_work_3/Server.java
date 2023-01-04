@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Vector;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -18,7 +17,7 @@ public class Server {
 
     private ArrayBlockingQueue<Message> messages;
 
-    private ServerSocket serverSocket;
+    private Connection<Message> connection;
 
     public Server(int port, CopyOnWriteArrayList<Connection> connections, ArrayBlockingQueue<Message> messages){
         this.port = port;
@@ -28,84 +27,85 @@ public class Server {
     // TODO: нужно изучить что будет когла вырубается сервер или клиент и обрабоать исключения нормально
 
 
-    public ServerSocket getServerSocket() {
-        return serverSocket;
+    public Connection<Message> getConnection() {
+        return connection;
     }
 
-    public void setServerSocket(ServerSocket serverSocket) {
-        this.serverSocket = serverSocket;
+    public void setConnection(Connection<Message> connection) {
+        this.connection = connection;
     }
 
-    public void run(){ // чтобы сервер начал слушать клиентов - нужен ServerSocket
+    public void run(){
+
         ThreadSenderSer threadSender = new ThreadSenderSer();
+        threadSender.start();
+
         try (ServerSocket serverSocket = new ServerSocket(port)) {
-            setServerSocket(serverSocket);
             System.out.println("Сервер запущен...");
+
             while (true){
+                Socket socket = serverSocket.accept();
+                Connection<Message> connection = new Connection<>(socket);
+                setConnection(connection);
+                connections.add(connection);
+                System.out.println(connections);
+
                 ThreadRecipientSer threadRecipient = new ThreadRecipientSer();
                 threadRecipient.start();
 
-                threadSender.start();
-
-                // todo по идее должен быть только один поток
-                // значит - или мы его создаем вне цикла или
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
-
     }
 
     public class ThreadSenderSer extends Thread{
 
         @Override
         public void run() {
-            for (Connection<Message> connection : Server.this.connections) {
-                // проверка на вшивость?
+            while (true) {
+                Message message = null;
                 try {
-                    connection.sendMessage(Server.this.messages.take());
-                } catch (IOException e) {
-                    System.out.println("Обработка Exception 10");
+                    message = Server.this.messages.take();
                 } catch (InterruptedException e) {
-                    System.out.println("Обработка Exception 11");
+                    throw new RuntimeException(e);
+                }
+                for (Connection<Message> connection : Server.this.connections) {
+                    if (Server.this.connection.equals(connection)){
+                        try {
+                            connection.sendMessage(message);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
                 }
             }
-
-            // TODO: нужно изучить что будет когла вырубается сервер или клиент и обрабоать исключения нормально
         }
     }
 
     public class ThreadRecipientSer extends Thread {
         @Override
         public void run() {
-            try {
-                Socket socket = Server.this.serverSocket.accept();
 
-                Connection<Message> connection = new Connection<>(socket);
-                Server.this.connections.add(connection);
-                System.out.println(Server.this.connections);
-                Message fromClient = connection.readMessage();
-                Server.this.messages.put(fromClient);
-                System.out.println(Server.this.messages);
-            } catch (IOException e) {
-                System.out.println("Обработка Exception 7");
-            } catch (ClassNotFoundException e) {
-                System.out.println("Обработка Exception 8");
-                System.out.println("это вроде связан с рид и райт у коннектион");
-            } catch (InterruptedException e) {
-                System.out.println("Обработка Exception 9");
+            while(true){
+                try {
+                    Message fromClient = Server.this.connection.readMessage();
+                    Server.this.messages.put(fromClient);
+                    System.out.println(Server.this.messages);
+                } catch (IOException e) {
+//                    System.out.println("Обработка Exception 7");
+                    Server.this.connections.remove(Server.this.connection);
+//                    System.out.println(Server.this.connections);
+                    return; // добавить finally?? нужно завершить связь и удалить коннектион
+                } catch (ClassNotFoundException e) {
+                    System.out.println("Обработка Exception 8");
+                } catch (InterruptedException e) {
+                    System.out.println("Обработка Exception 9");
+                }
             }
 
 
         }
     }
-// сначала запускаем сервер
-// видим- Сервер запущен...
-// дальше сервер уходит в бесконечный цикл и ждет клиента
-// идем в клиентское приложение
-
-// сервер дождался сообщения, вывел его, сформировал свое и отправил его клиенту
-// опять ждет в бесконечном цикле
 
 }
