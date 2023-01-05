@@ -10,6 +10,8 @@ public class Message implements Serializable {
     private String text;
     private LocalDateTime dateTime;
 
+    transient private Connection<Message> connection;
+
     public Message(String sender, String text) {
         this.sender = sender;
         this.text = text;
@@ -35,6 +37,13 @@ public class Message implements Serializable {
         dateTime = LocalDateTime.now();
     }
 
+    public Connection<Message> getConnection() {
+        return connection;
+    }
+
+    public void setConnection(Connection<Message> connection) {
+        this.connection = connection;
+    }
 
     @Override
     public String toString() {

@@ -13,7 +13,6 @@ public class Connection <T extends Message> implements AutoCloseable{
 
 
 
-
     public Connection(Socket socket) throws IOException { // передается только Socket, так как все остальное получаем из него
         this.socket = socket;
         output = new ObjectOutputStream(this.socket.getOutputStream()); // output будет представлять наш объект как массив байтов

@@ -17,7 +17,7 @@ public class Server {
 
     private ArrayBlockingQueue<Message> messages;
 
-    private Connection<Message> connection;
+
 
     public Server(int port, CopyOnWriteArrayList<Connection> connections, ArrayBlockingQueue<Message> messages){
         this.port = port;
@@ -27,13 +27,13 @@ public class Server {
     // TODO: нужно изучить что будет когла вырубается сервер или клиент и обрабоать исключения нормально
 
 
-    public Connection<Message> getConnection() {
-        return connection;
-    }
-
-    public void setConnection(Connection<Message> connection) {
-        this.connection = connection;
-    }
+//    public Connection<Message> getConnection() {
+//        return connection;
+//    }
+//
+//    public void setConnection(Connection<Message> connection) {
+//        this.connection = connection;
+//    }
 
     public void run(){
 
@@ -46,11 +46,10 @@ public class Server {
             while (true){
                 Socket socket = serverSocket.accept();
                 Connection<Message> connection = new Connection<>(socket);
-                setConnection(connection);
                 connections.add(connection);
                 System.out.println(connections);
 
-                ThreadRecipientSer threadRecipient = new ThreadRecipientSer();
+                ThreadRecipientSer threadRecipient = new ThreadRecipientSer(connection);
                 threadRecipient.start();
 
             }
@@ -71,30 +70,41 @@ public class Server {
                     throw new RuntimeException(e);
                 }
                 for (Connection<Message> connection : Server.this.connections) {
-                    if (Server.this.connection.equals(connection)){
+                    if(!message.getConnection().equals(connection)){
                         try {
                             connection.sendMessage(message);
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
                     }
+
+
                 }
             }
         }
     }
 
     public class ThreadRecipientSer extends Thread {
+        private Connection<Message> connection;
+
+        public ThreadRecipientSer(Connection<Message> connection) {
+            this.connection = connection;
+        }
+
+
+
         @Override
         public void run() {
 
             while(true){
                 try {
-                    Message fromClient = Server.this.connection.readMessage();
+                    Message fromClient = this.connection.readMessage();
+                    fromClient.setConnection(this.connection);
                     Server.this.messages.put(fromClient);
                     System.out.println(Server.this.messages);
                 } catch (IOException e) {
 //                    System.out.println("Обработка Exception 7");
-                    Server.this.connections.remove(Server.this.connection);
+                    Server.this.connections.remove(this.connection);
 //                    System.out.println(Server.this.connections);
                     return; // добавить finally?? нужно завершить связь и удалить коннектион
                 } catch (ClassNotFoundException e) {
